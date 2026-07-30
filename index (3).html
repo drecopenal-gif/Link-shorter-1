@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secure Link Shortener & Bypass</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: #f4f7f6; color: #333; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        .container { background: #fff; width: 100%; max-width: 600px; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); text-align: center; position: relative; overflow: hidden; }
+        
+        /* Progress Bar */
+        .progress-container { width: 100%; background: #e0e0e0; height: 6px; position: absolute; top: 0; left: 0; }
+        .progress-bar { height: 100%; background: #4CAF50; width: 0%; transition: width 1s linear; }
+
+        h2 { margin-bottom: 15px; color: #2c3e50; font-size: 22px; }
+        p { margin-bottom: 20px; color: #666; font-size: 14px; }
+
+        /* Ads Container */
+        .ads-box { margin: 15px 0; display: flex; flex-direction: column; align-items: center; gap: 15px; min-height: 350px; justify-content: center; background: #fafafa; border: 1px dashed #ddd; border-radius: 8px; padding: 10px; }
+        
+        /* Buttons */
+        .btn { background: #007bff; color: white; border: none; padding: 12px 25px; font-size: 16px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: background 0.3s; text-decoration: none; display: inline-block; }
+        .btn:hover { background: #0056b3; }
+        .btn:disabled { background: #cccccc; cursor: not-allowed; }
+
+        /* Admin & Input styles */
+        .input-group { display: flex; gap: 10px; margin-bottom: 15px; }
+        input[type="text"] { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; }
+        .result-box { background: #e8f4fd; padding: 10px; border-radius: 6px; margin-top: 15px; word-break: break-all; font-size: 14px; color: #0056b3; }
+        
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="progress-container">
+        <div class="progress-bar" id="progressBar"></div>
+    </div>
+
+    <!-- ADMIN PANEL: Link Creator -->
+    <div id="view-admin" class="view">
+        <h2>Link Shortener Dashboard</h2>
+        <p>Main link naakho ane user mate short link generate karo.</p>
+        <div class="input-group">
+            <input type="text" id="targetUrl" placeholder="Enter your main destination URL here...">
+            <button class="btn" onclick="generateShortLink()">Shorten</button>
+        </div>
+        <div id="shortResult" class="hidden result-box"></div>
+    </div>
+
+    <!-- PAGE 1 (6 Seconds Timer) -->
+    <div id="view-page1" class="view hidden">
+        <h2>Please Wait...</h2>
+        <p>Your link is preparing. Please stay on the page.</p>
+        <div class="ads-box">
+            <!-- Ad 300x250 -->
+            <div id="ad-slot-1"></div>
+            <!-- Ad 728x90 -->
+            <div id="ad-slot-2"></div>
+        </div>
+        <button id="btn-page1" class="btn" disabled>Please wait (6s)</button>
+    </div>
+
+    <!-- PAGE 2 (4 Seconds Timer) -->
+    <div id="view-page2" class="view hidden">
+        <h2>Almost There...</h2>
+        <p>Step 2 of 3. Just a few seconds remaining.</p>
+        <div class="ads-box">
+            <div id="ad-slot-3"></div>
+            <div id="ad-slot-4"></div>
+        </div>
+        <button id="btn-page2" class="btn" disabled>Please wait (4s)</button>
+    </div>
+
+    <!-- PAGE 3 (3 Seconds Timer + Get Access + Smartlink Logic) -->
+    <div id="view-page3" class="view hidden">
+        <h2>Final Step</h2>
+        <p>Click below to generate your final destination link.</p>
+        <div class="ads-box">
+            <div id="ad-slot-5"></div>
+            <div id="ad-slot-6"></div>
+        </div>
+        <button id="getAccessBtn" class="btn hidden" onclick="handleGetAccess()">Get Access</button>
+        <button id="btn-page3" class="btn" disabled>Please wait (3s)</button>
+    </div>
+</div>
+
+<!-- Ad Scripts & Logic Execution -->
+<script>
+    // Configuration & Ad Codes Templates
+    const ad300x250_code = `<script>
+        atOptions = { 'key' : 'fe5425c87d33c6441e36242e1aa8281b', 'format' : 'iframe', 'height' : 250, 'width' : 300, 'params' : {} };
+    <\/script>
+    <script src="https://www.highperformanceformat.com/fe5425c87d33c6441e36242e1aa8281b/invoke.js"><\/script>`;
+
+    const ad728x90_code = `<script>
+        atOptions = { 'key' : '4c342efed49c6f38506bdcbbb7ecee4a', 'format' : 'iframe', 'height' : 90, 'width' : 728, 'params' : {} };
+    <\/script>
+    <script src="https://www.highperformanceformat.com/4c342efed49c6f38506bdcbbb7ecee4a/invoke.js"><\/script>`;
+
+    const socialBarUrl = "https://pl30604520.effectivecpmnetwork.com/c6/98/6f/c6986f1308525aeb043ac559070a08c6.js";
+    const smartLinkUrl = "https://www.effectivecpmnetwork.com/v390gi5k?key=a634a3f6a0067c14cb621dc5e47b5aec";
+
+    let currentMainUrl = "";
+    let userSessionClicks = 0; // Tracks required click triggers per session based on random percentages
+
+    // Check URL parameters on load to determine current view
+    window.onload = function() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const data = urlParams.get('r');
+        
+        if (data) {
+            try {
+                currentMainUrl = atob(data); // Decode destination URL
+                initializeUserSession();
+                startPage1();
+            } catch(e) {
+                showAdminView();
+            }
+        } else {
+            showAdminView();
+        }
+    };
+
+    function showAdminView() {
+        document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
+        document.getElementById('view-admin').classList.remove('hidden');
+        document.querySelector('.progress-container').style.display = 'none';
+    }
+
+    function generateShortLink() {
+        let url = document.getElementById('targetUrl').value.trim();
+        if(!url) { alert('Please enter a valid URL'); return; }
+        if(!url.startsWith('http')) { url = 'https://' + url; }
+
+        const encoded = btoa(url);
+        const shortLink = window.location.origin + window.location.pathname + '?r=' + encoded;
+        
+        const resultBox = document.getElementById('shortResult');
+        resultBox.classList.remove('hidden');
+        resultBox.innerHTML = `Short Link Generated:<br><b><a href="${shortLink}" target="_blank">${shortLink}</a></b>`;
+    }
+
+    // Random Traffic Control Logic (90% free, 4% two-clicks, 6% one-click)
+    function initializeUserSession() {
+        const rand = Math.random() * 100;
+        if (rand < 90) {
+            userSessionClicks = 0; // Free / No forced extra click
+        } else if (rand < 94) {
+            userSessionClicks = 2; // 4% chance requires 2 clicks
+        } else {
+            userSessionClicks = 1; // 6% chance requires 1 click
+        }
+
+        // Random Social Bar Injection (Random page selection)
+        if (Math.random() < 0.33) {
+            loadSocialBar();
+        }
+    }
+
+    function loadSocialBar() {
+        let s = document.createElement('script');
+        s.src = socialBarUrl;
+        document.body.appendChild(s);
+    }
+
+    function injectAds(slot1Id, slot2Id) {
+        document.getElementById(slot1Id).innerHTML = ad300x250_code;
+        document.getElementById(slot2Id).innerHTML = ad728x90_code;
+    }
+
+    // PAGE 1 LOGIC (6 Seconds)
+    function startPage1() {
+        document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
+        document.getElementById('view-page1').classList.remove('hidden');
+        injectAds('ad-slot-1', 'ad-slot-2');
+        
+        runTimer(6, 'btn-page1', 'Please wait ', 'Continue', () => {
+            if (userSessionClicks > 0 && Math.random() > 0.5) {
+                triggerForcedClickBehavior();
+            } else {
+                startPage2();
+            }
+        });
+    }
+
+    // PAGE 2 LOGIC (4 Seconds - Ads Refreshed)
+    function startPage2() {
+        document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
+        document.getElementById('view-page2').classList.remove('hidden');
+        injectAds('ad-slot-3', 'ad-slot-4');
+        
+        runTimer(4, 'btn-page2', 'Please wait ', 'Continue', () => {
+            startPage3();
+        });
+    }
+
+    // PAGE 3 LOGIC (3 Seconds - Ads Refreshed + Get Access Button)
+    function startPage3() {
+        document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
+        document.getElementById('view-page3').classList.remove('hidden');
+        injectAds('ad-slot-5', 'ad-slot-6');
+        
+        runTimer(3, 'btn-page3', 'Please wait ', '', () => {
+            document.getElementById('btn-page3').classList.add('hidden');
+            document.getElementById('getAccessBtn').classList.remove('hidden');
+        });
+    }
+
+    // Timer Utility with Progress Bar
+    function runTimer(seconds, btnId, textPrefix, textDone, callback) {
+        let timeLeft = seconds;
+        const btn = document.getElementById(btnId);
+        const progressBar = document.getElementById('progressBar');
+        
+        let progressInterval = 100 / seconds;
+        let currentProgress = 0;
+
+        let timer = setInterval(() => {
+            timeLeft--;
+            currentProgress += progressInterval;
+            progressBar.style.width = currentProgress + '%';
+
+            if (timeLeft > 0) {
+                btn.innerText = textPrefix + '(' + timeLeft + 's)';
+            } else {
+                clearInterval(timer);
+                btn.innerText = textDone;
+                btn.disabled = false;
+                if(callback) callback();
+            }
+        }, 1000);
+    }
+
+    // Handle Forced Click Behavior based on randomized system rules
+    function triggerForcedClickBehavior() {
+        alert("Please complete verification ad interaction to proceed.");
+        // Redirect temporarily to smartlink or simulate click requirement
+        window.location.href = smartLinkUrl;
+    }
+
+    // Final "Get Access" button handler with Smartlink 35% Random Logic
+    function handleGetAccess() {
+        // 35% users will hit the smartlink first randomly, others direct/redirect flow
+        const smartLinkChance = Math.random() * 100;
+        if (smartLinkChance <= 35) {
+            // Open smartlink in current window, set local storage flag to redirect to main link on return
+            localStorage.setItem('redirect_main', currentMainUrl);
+            window.location.href = smartLinkUrl;
+        } else {
+            window.location.href = currentMainUrl;
+        }
+    }
+
+    // Check if user returned from Smartlink
+    window.addEventListener('focus', function() {
+        const pendingMain = localStorage.getItem('redirect_main');
+        if (pendingMain) {
+            localStorage.removeItem('redirect_main');
+            window.location.href = pendingMain;
+        }
+    });
+</script>
+
+</body>
+</html>
